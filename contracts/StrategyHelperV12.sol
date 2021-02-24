@@ -40,6 +40,14 @@ contract StrategyHelperV1 is IStrategyHelper {
         return BUSD.balanceOf(BNB_BUSD_POOL).mul(1e18).div(WBNB.balanceOf(BNB_BUSD_POOL));
     }
 
+    function flipPriceInBNB(address _flip) override view public returns(uint) {
+        return tvlInBNB(_flip, 1e18);
+    }
+
+    function flipPriceInUSD(address _flip) override view public returns(uint) {
+        return tvl(_flip, 1e18);
+    }
+
     function cakePerYearOfPool(uint pid) view public returns(uint) {
         (, uint allocPoint,,) = master.poolInfo(pid);
         return master.cakePerBlock().mul(blockPerYear()).mul(allocPoint).div(master.totalAllocPoint());
@@ -51,12 +59,14 @@ contract StrategyHelperV1 is IStrategyHelper {
     }
 
     function profitOf(IBunnyMinter minter, address flip, uint amount) override external view returns (uint _usd, uint _bunny, uint _bnb) {
+        //传入flip的amount，返回价值多少usd
         _usd = tvl(flip, amount);
         if (address(minter) == address(0)) {
             _bunny = 0;
         } else {
             uint performanceFee = minter.performanceFee(_usd);
             _usd = _usd.sub(performanceFee);
+            //将performanceFee转换成bnb的数量，然后返回可以铸造多少bunny
             uint bnbAmount = performanceFee.mul(1e18).div(bnbPriceInUSD());
             _bunny = minter.amountBunnyToMint(bnbAmount);
         }
@@ -76,6 +86,7 @@ contract StrategyHelperV1 is IStrategyHelper {
         _bnb = 0;
     }
 
+    //返回flip币的usd价格
     function tvl(address _flip, uint amount) override public view returns (uint) {
         if (_flip == address(CAKE)) {
             return cakePriceInBNB().mul(bnbPriceInUSD()).mul(amount).div(1e36);
@@ -90,11 +101,10 @@ contract StrategyHelperV1 is IStrategyHelper {
 
         uint balanceToken0 = IBEP20(_token0).balanceOf(_flip);
         uint price = tokenPriceInBNB(_token0);
-        return balanceToken0.mul(price).div(1e18).mul(bnbPriceInUSD()).div(1e18).mul(2);
+        return balanceToken0.mul(price).div(1e18).mul(bnbPriceInUSD()).div(1e18).mul(2).mul(amount).div(IBEP20(_flip).totalSupply());
     }
 
     function tvlInBNB(address _flip, uint amount) override public view returns (uint) {
-        //amount为liquidity币的数量
         if (_flip == address(CAKE)) {
             return cakePriceInBNB().mul(amount).div(1e18);
         }
@@ -107,10 +117,10 @@ contract StrategyHelperV1 is IStrategyHelper {
 
         uint balanceToken0 = IBEP20(_token0).balanceOf(_flip);
         uint price = tokenPriceInBNB(_token0);
-        return balanceToken0.mul(price).div(1e18).mul(2);
+        return balanceToken0.mul(price).div(1e18).mul(2).mul(amount).div(IBEP20(_flip).totalSupply());
     }
 
-    function compoundingAPY(uint pid, uint compoundUnit) view public returns(uint) {
+    function compoundingAPY(uint pid, uint compoundUnit) override view public returns(uint) {
         uint __apy = _apy(pid);
         uint compoundTimes = 365 days / compoundUnit;
         uint unitAPY = 1e18 + (__apy / compoundTimes);

@@ -200,9 +200,9 @@ contract StrategyCompoundCake is IStrategyLegacy, Ownable {
             uint profit = _withdraw.sub(principal);
             uint withdrawalFee = minter.withdrawalFee(_withdraw, depositTimestamp);
             uint performanceFee = minter.performanceFee(profit);
-
+            //cake 铸造bunny，并转给msg.sender
             minter.mintFor(address(CAKE), withdrawalFee, performanceFee, msg.sender, depositTimestamp);
-
+            //转cake给用户
             CAKE.safeTransfer(msg.sender, _withdraw.sub(withdrawalFee).sub(performanceFee));
         } else {
             CAKE.safeTransfer(msg.sender, _withdraw);

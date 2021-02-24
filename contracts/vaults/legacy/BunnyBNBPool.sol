@@ -116,10 +116,15 @@ contract BunnyBNBPool is IStrategyLegacy, Ownable {
         }
 
         uint amount = 1e18;
+        //一年时间内，每一个flip币产生多少bunny
         uint bunny = minter.amountBunnyToMintForBunnyBNB(amount, 365 days);
+        //一个flip锁仓的bnb价值
         uint _tvl = helper.tvlInBNB(address(token), amount);
+        //一个bunny币的bnb价值
         uint bunnyPrice = helper.tokenPriceInBNB(address(BUNNY));
 
+        //bunny/_tvl 为一年内每一个bnb产生多少bunny币
+        //乘以（一个bunny币的bnb价值）为 一年内产生的bunny币的bnb价值
         return (bunny.mul(bunnyPrice).div(_tvl), 0, 0);
     }
 

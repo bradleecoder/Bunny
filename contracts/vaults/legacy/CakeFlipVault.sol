@@ -14,7 +14,7 @@ import "../../interfaces/IMasterChef.sol";
 import "../../interfaces/legacy/ICakeVault.sol";
 import "../../interfaces/IBunnyMinter.sol";
 import "../../interfaces/legacy/IStrategyLegacy.sol";
-
+//for legecy PoolConstant.PoolTypes.FlipToCake
 contract CakeFlipVault is IStrategyLegacy, RewardsDistributionRecipient, ReentrancyGuard, Pausable {
     using SafeMath for uint256;
     using SafeBEP20 for IBEP20;

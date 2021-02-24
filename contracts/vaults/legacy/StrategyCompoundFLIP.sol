@@ -42,7 +42,7 @@ import "../../interfaces/IMasterChef.sol";
 import "../../interfaces/IBunnyMinter.sol";
 import "../../interfaces/legacy/IStrategyHelper.sol";
 import "../../interfaces/legacy/IStrategyLegacy.sol";
-
+// for legacy PoolConstant.PoolTypes.FlipToFlip
 contract StrategyCompoundFLIP is IStrategyLegacy, Ownable {
     using SafeBEP20 for IBEP20;
     using SafeMath for uint256;
@@ -68,25 +68,29 @@ contract StrategyCompoundFLIP is IStrategyLegacy, Ownable {
     IBunnyMinter public minter;
     IStrategyHelper public helper = IStrategyHelper(0x154d803C328fFd70ef5df52cb027d82821520ECE);
 
+    //和pancake farm那边的pool id关联
     constructor(uint _pid) public {
         if (_pid != 0) {
+            //_token为pancake farm pool质押的lp token
             (address _token,,,) = CAKE_MASTER_CHEF.poolInfo(_pid);
             setFlipToken(_token);
             poolId = _pid;
         }
 
         CAKE.safeApprove(address(ROUTER), 0);
+        //此合约授权ROUTER转CAKE币
         CAKE.safeApprove(address(ROUTER), uint(~0));
     }
 
+    //传入pair的地址
     function setFlipToken(address _token) public onlyOwner {
         require(address(token) == address(0), 'flip token set already');
         token = IBEP20(_token);
         _token0 = IPancakePair(_token).token0();
         _token1 = IPancakePair(_token).token1();
-
+        //pair币，此合约地址授权CAKE_MASTER_CHEF转lp 币
         token.safeApprove(address(CAKE_MASTER_CHEF), uint(~0));
-
+        //此合约地址授权ROUTER转lp 币对应的两个swap币
         IBEP20(_token0).safeApprove(address(ROUTER), 0);
         IBEP20(_token0).safeApprove(address(ROUTER), uint(~0));
         IBEP20(_token1).safeApprove(address(ROUTER), 0);
@@ -116,12 +120,14 @@ contract StrategyCompoundFLIP is IStrategyLegacy, Ownable {
     }
 
     function balance() override public view returns (uint) {
+        //此合约地址在pancakeswap那边的pool里flip币的数量+此合约的flip币的数量
         (uint amount,) = CAKE_MASTER_CHEF.userInfo(poolId, address(this));
         return token.balanceOf(address(this)).add(amount);
     }
 
     function balanceOf(address account) override public view returns(uint) {
         if (totalShares == 0) return 0;
+        //按照用户share的比例算出flip币的balance
         return balance().mul(sharesOf(account)).div(totalShares);
     }
 
@@ -144,11 +150,13 @@ contract StrategyCompoundFLIP is IStrategyLegacy, Ownable {
             // something wrong...
             return (0, 0, 0);
         }
-
+        //principal must less than _balance
+        //返回传入的liquidity币的数量是多少usd（减去了performance fee），performancefee可以价值多少bnb，然后这些bnb可以铸造多少bunny币
         return helper.profitOf(minter, address(token), _balance.sub(principal));
     }
 
     function tvl() override public view returns (uint) {
+        //返回此币价值多少usd
         return helper.tvl(address(token), balance());
     }
 
@@ -183,9 +191,11 @@ contract StrategyCompoundFLIP is IStrategyLegacy, Ownable {
     }
 
     function priceShare() public view returns(uint) {
+        //每个share可以价值多少个flip币
         return balance().mul(1e18).div(totalShares);
     }
 
+    //存入flip币，从用户转入此合约地址
     function _depositTo(uint _amount, address _to) private {
         uint _pool = balance();
         uint _before = token.balanceOf(address(this));
@@ -196,6 +206,7 @@ contract StrategyCompoundFLIP is IStrategyLegacy, Ownable {
         if (totalShares == 0) {
             shares = _amount;
         } else {
+            //按totalShares/balance()的比例转换amount为share
             shares = (_amount.mul(totalShares)).div(_pool);
         }
 
@@ -203,7 +214,7 @@ contract StrategyCompoundFLIP is IStrategyLegacy, Ownable {
         _shares[_to] = _shares[_to].add(shares);
         _principal[_to] = _principal[_to].add(_amount);
         depositedAt[_to] = block.timestamp;
-
+        //todo check flip币存入pancakeswap那边
         CAKE_MASTER_CHEF.deposit(poolId, _amount);
     }
 
@@ -222,6 +233,7 @@ contract StrategyCompoundFLIP is IStrategyLegacy, Ownable {
         delete _shares[msg.sender];
 
         uint _before = token.balanceOf(address(this));
+        //pancakeswap那边提取flip币到本合约
         CAKE_MASTER_CHEF.withdraw(poolId, _withdraw);
         uint _after = token.balanceOf(address(this));
         _withdraw = _after.sub(_before);
@@ -235,9 +247,9 @@ contract StrategyCompoundFLIP is IStrategyLegacy, Ownable {
             uint profit = _withdraw.sub(principal);
             uint withdrawalFee = minter.withdrawalFee(_withdraw, depositTimestamp);
             uint performanceFee = minter.performanceFee(profit);
-
+            //用此fee来mint bunny币，并转给msg.sender
             minter.mintFor(address(token), withdrawalFee, performanceFee, msg.sender, depositTimestamp);
-
+            //除去用来铸造bunny币的flip币外，剩余的转给用户
             token.safeTransfer(msg.sender, _withdraw.sub(withdrawalFee).sub(performanceFee));
         } else {
             token.safeTransfer(msg.sender, _withdraw);
@@ -252,7 +264,8 @@ contract StrategyCompoundFLIP is IStrategyLegacy, Ownable {
         uint cakeForToken0 = cakeAmount.div(2);
         cakeToToken(_token0, cakeForToken0);
         cakeToToken(_token1, cakeAmount.sub(cakeForToken0));
-        uint liquidity = generateFlipToken();
+        uint liquidity = generateFlipToken();//调用addliquidity，产生的flip币转入此合约，然后合约再调用deposit
+        // Deposit LP tokens to MasterChef for CAKE allocation.
         CAKE_MASTER_CHEF.deposit(poolId, liquidity);
     }
 

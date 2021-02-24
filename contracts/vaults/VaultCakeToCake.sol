@@ -54,6 +54,7 @@ contract VaultCakeToCake is VaultController, IStrategy {
     /* ========== STATE VARIABLES ========== */
 
     uint public constant override pid = 0;
+    //质押cake，获取cake profit 及bunny
     PoolConstant.PoolTypes public constant override poolType = PoolConstant.PoolTypes.CakeStake;
 
     uint public totalShares;
@@ -116,7 +117,7 @@ contract VaultCakeToCake is VaultController, IStrategy {
     }
 
     /* ========== MUTATIVE FUNCTIONS ========== */
-
+    //deposit cake to this contract
     function deposit(uint _amount) public override {
         _deposit(_amount, msg.sender);
 

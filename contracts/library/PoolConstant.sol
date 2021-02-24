@@ -36,6 +36,11 @@ pragma solidity ^0.6.12;
 library PoolConstant {
 
     enum PoolTypes {
+        //BunnyStake 质押bunny获取wbnb
+        //BunnyFlip 质押bunnybnb flip获取bunny
+        //CakeStake 质押cake 获取cake profit 及bunny
+        //FlipToFlip 质押flip，获取flip及flip profit及bunny
+        //FlipToCake 质押flip，获取cake及bunny
         BunnyStake, BunnyFlip, CakeStake, FlipToFlip, FlipToCake
     }
 

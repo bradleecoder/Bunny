@@ -73,9 +73,9 @@ contract Dashboard is OwnableWithKeeper {
 
     mapping(address => address) private pairAddresses;
     mapping(address => PoolConstant.PoolTypes) private poolTypes;
-    mapping(address => uint) private poolIds;
+    mapping(address => uint) private poolIds;//这边pancakebunny的poolid？
     mapping(address => bool) private legacyPools;
-    mapping(address => address) private linkedPools;
+    mapping(address => address) private linkedPools;//for link到升级前的pool
 
     /* ========== Restricted Operation ========== */
 
@@ -83,10 +83,12 @@ contract Dashboard is OwnableWithKeeper {
         pairAddresses[asset] = pair;
     }
 
+    //这边pancakebunny的pool 类型
     function setPoolType(address pool, PoolConstant.PoolTypes poolType) external onlyAuthorized {
         poolTypes[pool] = poolType;
     }
 
+    //这边pancakebunny的poolid？
     function setPoolId(address pool, uint pid) external onlyAuthorized {
         poolIds[pool] = pid;
     }
@@ -95,12 +97,14 @@ contract Dashboard is OwnableWithKeeper {
         legacyPools[pool] = legacy;
     }
 
+    //应该是与pancakeswap那边的pool连接
     function setLinkedPool(address pool, address linked) external onlyAuthorized {
         linkedPools[pool] = linked;
     }
 
     /* ========== Value Calculation ========== */
 
+    //bnb的usd价格
     function priceOfBNB() view public returns (uint) {
         return BUSD.balanceOf(BNB_BUSD_POOL).mul(1e18).div(WBNB.balanceOf(BNB_BUSD_POOL));
     }
@@ -110,6 +114,7 @@ contract Dashboard is OwnableWithKeeper {
         return bunnyPriceInUSD;
     }
 
+    //返回某个币如bunny币的bnb价格和usd价格
     function valueOfAsset(address asset, uint amount) public view returns (uint valueInBNB, uint valueInUSD) {
         if (asset == address(0) || asset == address(WBNB)) {
             valueInBNB = amount;
@@ -144,12 +149,17 @@ contract Dashboard is OwnableWithKeeper {
     /* ========== APY Calculation ========== */
 
     function basicCompound(uint pid, uint compound) private view returns (uint) {
+        //返回mastershef里面的poolinfo
         (address token, uint allocPoint,,) = master.poolInfo(pid);
+        //某个池子质押的币额度的bnb价值
         (uint valueInBNB,) = valueOfAsset(token, IBEP20(token).balanceOf(address(master)));
-
+        //cake的bnb价格
         (uint cakePriceInBNB,) = valueOfAsset(address(CAKE), 1e18);
+        //此allocPoint每年可以分配多少cake
         uint cakePerYearOfPool = master.cakePerBlock().mul(BLOCK_PER_YEAR).mul(allocPoint).div(master.totalAllocPoint());
+        //池子里的币，每个币每年可以分到多少bnb价值的cake
         uint apr = cakePriceInBNB.mul(cakePerYearOfPool).div(valueInBNB);
+        //计算复利
         return apr.div(compound).add(1e18).power(compound).sub(1e18);
     }
 

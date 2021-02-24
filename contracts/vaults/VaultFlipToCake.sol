@@ -24,6 +24,7 @@ contract VaultFlipToCake is VaultController, IStrategy, RewardsDistributionRecip
 
     address private constant CAKE = 0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82;
     IMasterChef private constant CAKE_MASTER_CHEF = IMasterChef(0x73feaa1eE314F8c655E354234017bE2193C9E24E);
+    //FlipToCake 质押flip，获取cake及bunny
     PoolConstant.PoolTypes public constant override poolType = PoolConstant.PoolTypes.FlipToCake;
 
     /* ========== STATE VARIABLES ========== */

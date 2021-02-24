@@ -18,7 +18,7 @@ contract BunnyMinter is IBunnyMinter, Ownable, PancakeSwap {
     address public constant dev = 0xe87f02606911223C2Cf200398FFAF353f60801F7;
     IBEP20 private constant WBNB = IBEP20(0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c);
 
-    uint public override WITHDRAWAL_FEE_FREE_PERIOD = 3 days;
+    uint public override WITHDRAWAL_FEE_FREE_PERIOD = 3 days;//0.5% fee for withdrawals within 3 days
     uint public override WITHDRAWAL_FEE = 50;
     uint public constant FEE_MAX = 10000;
 
@@ -26,11 +26,11 @@ contract BunnyMinter is IBunnyMinter, Ownable, PancakeSwap {
 
     uint public override bunnyPerProfitBNB;
     uint public bunnyPerBunnyBNBFlip;
-
+    //bunny pool 合约，非swap那边的合约
     address public constant bunnyPool = 0xCADc8CB26c8C7cB46500E61171b5F27e9bd7889D;
     IStrategyHelper public helper = IStrategyHelper(0xA84c09C1a2cF4918CaEf625682B429398b97A1a0);
 
-    mapping (address => bool) private _minters;
+    mapping (address => bool) private _minters;//指某个合约地址还是个人地址？
 
     modifier onlyMinter {
         require(isMinter(msg.sender) == true, "not minter");
@@ -38,8 +38,9 @@ contract BunnyMinter is IBunnyMinter, Ownable, PancakeSwap {
     }
 
     constructor() public {
-        bunnyPerProfitBNB = 10e18;
-        bunnyPerBunnyBNBFlip = 6e18;
+        bunnyPerProfitBNB = 10e18;//1个bnb产生10个bunny币？
+        bunnyPerBunnyBNBFlip = 6e18;//1个flip产生6个bunny币？
+        //此合约授权bunnyPool合约转bunny币
         bunny.approve(bunnyPool, uint(~0));
     }
 
@@ -83,6 +84,7 @@ contract BunnyMinter is IBunnyMinter, Ownable, PancakeSwap {
     }
 
     function isMinter(address account) override view public returns(bool) {
+        //bunny币合约的owner是此合约？
         if (bunny.getOwner() != address(this)) {
             return false;
         }
@@ -94,14 +96,17 @@ contract BunnyMinter is IBunnyMinter, Ownable, PancakeSwap {
     }
 
     function amountBunnyToMint(uint bnbProfit) override view public returns(uint) {
+        //转换bnb to bunny币数量
         return bnbProfit.mul(bunnyPerProfitBNB).div(1e18);
     }
 
     function amountBunnyToMintForBunnyBNB(uint amount, uint duration) override view public returns(uint) {
+        //某段时间内产生的bunny数量，bunnyPerBunnyBNBFlip是一年时间内，每一个flip币产生多少bunny
         return amount.mul(bunnyPerBunnyBNBFlip).mul(duration).div(365 days).div(1e18);
     }
 
     function withdrawalFee(uint amount, uint depositedAt) override view external returns(uint) {
+        //3天内收取0.5% fee，depositedAt为存入时的时间，amount为bunny币的数量
         if (depositedAt.add(WITHDRAWAL_FEE_FREE_PERIOD) > block.timestamp) {
             return amount.mul(WITHDRAWAL_FEE).div(FEE_MAX);
         }
@@ -109,19 +114,31 @@ contract BunnyMinter is IBunnyMinter, Ownable, PancakeSwap {
     }
 
     function performanceFee(uint profit) override view public returns(uint) {
+        //返回profit*30%，bunny币的
         return profit.mul(PERFORMANCE_FEE).div(FEE_MAX);
     }
 
     function mintFor(address flip, uint _withdrawalFee, uint _performanceFee, address to, uint) override external onlyMinter {
+        //bunny pool 产生的费用用来产生liquidity币
         uint feeSum = _performanceFee.add(_withdrawalFee);
+        //转入费用，从msg.sender转入flip 币作为费用到此合约上
+        //_withdrawalFee，_performanceFee均为flip币的数量
         IBEP20(flip).safeTransferFrom(msg.sender, address(this), feeSum);
 
+        //flip合约地址为PancakePair的pool地址
+        //传入flip币合约地址，此合约flip币余额，将此合约上的flip币转换为相应的两种币，然后add liquidity到pool（pancakeswap那边的wbnb bunny pool）上，产生bunny wbnb的流动性币
         uint bunnyBNBAmount = tokenToBunnyBNB(flip, IBEP20(flip).balanceOf(address(this)));
-        address flipToken = bunnyBNBFlipToken();
+        address flipToken = bunnyBNBFlipToken();//获取bunny wbnb的pair地址，即flip合约的地址
+        //给bunnypool转入liquidity币作为reward token
+        //将flip币从pancakeswap那边转入到bunnyPool里
         IBEP20(flipToken).safeTransfer(bunnyPool, bunnyBNBAmount);
+        //转入flip币后调用notifyRewardAmount更新rewardrate
         IStakingRewards(bunnyPool).notifyRewardAmount(bunnyBNBAmount);
 
+        //这个bunnyBNBAmount数量的liquidity对应的pancakeswap那边的pool里的总的币的额度，以wbnb为计量单位
+        //pancakeswap那边的pool里的总的币的额度*_performanceFee在feeSum里的占比
         uint contribution = helper.tvlInBNB(flipToken, bunnyBNBAmount).mul(_performanceFee).div(feeSum);
+        //contribution为多少wbnb，按照1个wbnb产生10个bunny币返回数量
         uint mintBunny = amountBunnyToMint(contribution);
         mint(mintBunny, to);
     }
@@ -135,7 +152,7 @@ contract BunnyMinter is IBunnyMinter, Ownable, PancakeSwap {
     function mint(uint amount, address to) private {
         bunny.mint(amount);
         bunny.transfer(to, amount);
-
+        //额外mint 15%作为开发者费用质押到bunnyPool
         uint bunnyForDev = amount.mul(15).div(100);
         bunny.mint(bunnyForDev);
         IStakingRewards(bunnyPool).stakeTo(bunnyForDev, dev);

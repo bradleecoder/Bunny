@@ -28,7 +28,7 @@ abstract contract PancakeSwap {
         if (token == cake) {
             flipAmount = _cakeToBunnyBNBFlip(amount);
         } else {
-            // flip
+            // flip，任何liquidity的币都可以用此函数转换为bunny bnb的liquidity币，通过将传入的flip 移除流动性，获取相应的两种币，然后通过swap转换为wbnb和bunny币，然后add liquidity到bunny wbnb的pool里产生liquidity币
             flipAmount = _flipToBunnyBNBFlip(token, amount);
         }
     }
@@ -46,6 +46,7 @@ abstract contract PancakeSwap {
         address _token1 = pair.token1();
         IBEP20(token).safeApprove(address(ROUTER), 0);
         IBEP20(token).safeApprove(address(ROUTER), amount);
+        //移除pancakepair上的liquidity，转wbnb及bunny币到此合约
         ROUTER.removeLiquidity(_token0, _token1, amount, 0, 0, address(this), block.timestamp);
         if (_token0 == _wbnb) {
             swapToken(_token1, IBEP20(_token1).balanceOf(address(this)), _bunny);
@@ -88,7 +89,7 @@ abstract contract PancakeSwap {
         IBEP20(_bunny).safeApprove(address(ROUTER), amountADesired);
         IBEP20(_wbnb).safeApprove(address(ROUTER), 0);
         IBEP20(_wbnb).safeApprove(address(ROUTER), amountBDesired);
-
+        //从此合约地址上转出bunny及wbnb的币到pancakeswap那边的pool里
         (,,liquidity) = ROUTER.addLiquidity(_bunny, _wbnb, amountADesired, amountBDesired, 0, 0, address(this), block.timestamp);
 
         // send dust
