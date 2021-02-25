@@ -71,6 +71,7 @@ contract VaultFlipToCake is VaultController, IStrategy, RewardsDistributionRecip
         __RewardsDistributionRecipient_init();
         __ReentrancyGuard_init();
 
+        //授权masterchef转移此合约的flip币
         _stakingToken.safeApprove(address(CAKE_MASTER_CHEF), uint(~0));
 
         pid = _pid;
@@ -168,18 +169,20 @@ contract VaultFlipToCake is VaultController, IStrategy, RewardsDistributionRecip
         require(amount > 0, "VaultFlipToCake: amount must be greater than zero");
         _totalSupply = _totalSupply.sub(amount);
         _balances[msg.sender] = _balances[msg.sender].sub(amount);
+        //提取flip币，获得cake奖励到此合约
         CAKE_MASTER_CHEF.withdraw(pid, amount);
         uint withdrawalFee;
         if (canMint()) {
             uint depositTimestamp = _depositedAt[msg.sender];
             withdrawalFee = _minter.withdrawalFee(amount, depositTimestamp);
             if (withdrawalFee > 0) {
-                uint performanceFee = withdrawalFee.div(100);
+                uint performanceFee = withdrawalFee.div(100);//1/100?
+                //转给用户bunny币，只是用withdrawfee生成的
                 _minter.mintFor(address(_stakingToken), withdrawalFee.sub(performanceFee), performanceFee, msg.sender, depositTimestamp);
                 amount = amount.sub(withdrawalFee);
             }
         }
-
+        //转给用户flip币
         _stakingToken.safeTransfer(msg.sender, amount);
         emit Withdrawn(msg.sender, amount, withdrawalFee);
 
@@ -199,20 +202,23 @@ contract VaultFlipToCake is VaultController, IStrategy, RewardsDistributionRecip
         if (reward > 0) {
             rewards[msg.sender] = 0;
             _rewardsToken.withdraw(reward);
+            //withdraw里面提取了cake币
             uint cakeBalance = IBEP20(CAKE).balanceOf(address(this));
             uint performanceFee;
 
             if (canMint()) {
                 performanceFee = _minter.performanceFee(cakeBalance);
+                //转给用户performancefee生成的bunny币
                 _minter.mintFor(CAKE, 0, performanceFee, msg.sender, _depositedAt[msg.sender]);
             }
-
+            //转给用户cake
             IBEP20(CAKE).safeTransfer(msg.sender, cakeBalance.sub(performanceFee));
             emit ProfitPaid(msg.sender, cakeBalance, performanceFee);
         }
     }
 
     function harvest() public override {
+        //提取profit cake
         CAKE_MASTER_CHEF.withdraw(pid, 0);
         _harvest();
     }

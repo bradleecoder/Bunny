@@ -95,15 +95,18 @@ contract BunnyPool is IStrategyLegacy, RewardsDistributionRecipient, ReentrancyG
         } else {
             //两小时到90天内
             uint soldInPresale = IPresale(presaleContract).totalBalance().div(2).mul(3); // mint 150% of presale for making flip token
+            //bunny 的流通量
             uint bunnySupply = stakingToken.totalSupply().sub(stakingToken.balanceOf(deadAddress));
+            //什么时候预售大于流通量？
             if (soldInPresale >= bunnySupply) {
                 return _balances[account].sub(_presaleBalance[account]);
             }
+            //有新mint的
             uint bunnyNewMint = bunnySupply.sub(soldInPresale);
             if (bunnyNewMint >= soldInPresale) {
                 return _balances[account];
             }
-
+            //计算锁定比例
             uint lockedRatio = (soldInPresale.sub(bunnyNewMint)).mul(1e18).div(soldInPresale);
             uint lockedBalance = _presaleBalance[account].mul(lockedRatio).div(1e18);
             return _balances[account].sub(lockedBalance);
@@ -129,14 +132,18 @@ contract BunnyPool is IStrategyLegacy, RewardsDistributionRecipient, ReentrancyG
         if (__totalSupply == 0) {
             __totalSupply = tokenDecimals;
         }
-        //rewardRate指每秒产生多少liquidity币，除以bunny币的supply为
+        //rewardRate指每秒产生多少liquidity币，除以bunny币的supply为 每一个bunny币每秒产生多少liquidity
         uint rewardPerTokenPerSecond = rewardRate.mul(tokenDecimals).div(__totalSupply);
         uint bunnyPrice = helper.tokenPriceInBNB(address(stakingToken));
+        //一个flip锁仓的bnb价值
         uint flipPrice = helper.tvlInBNB(address(rewardsToken), 1e18);
 
         _usd = 0;
         _bunny = 0;
-        //1个bunny币1年产生多少flip币，以bnb为计价单位
+        //rewardPerTokenPerSecond*(365 days),每一个bunny币一年产生多少liquidity
+        //rewardPerTokenPerSecond*365days*flipPrice 每一个bunny币一年产生对应多少锁仓的bnb
+        //再除以bunnyPrice指一个bnb一年对应产生多少锁仓的bnb
+        //rewardPerTokenPerSecond/bunnyPrice 每一个bnb币每秒产生多少liquidity币
         _bnb = rewardPerTokenPerSecond.mul(365 days).mul(flipPrice).div(bunnyPrice);
     }
 

@@ -74,6 +74,7 @@ contract VaultFlipToFlip is VaultController, IStrategy {
     function initialize(uint _pid) external initializer {
         require(_pid != 0, "VaultFlipToFlip: pid must not be zero");
 
+        //flip token
         (address _token,,,) = CAKE_MASTER_CHEF.poolInfo(_pid);
         __VaultController_init(IBEP20(_token));
         setFlipToken(_token);
@@ -87,6 +88,7 @@ contract VaultFlipToFlip is VaultController, IStrategy {
 
     function balance() override public view returns (uint) {
         (uint amount,) = CAKE_MASTER_CHEF.userInfo(pid, address(this));
+        //质押的flip+此合约上的flip
         return _stakingToken.balanceOf(address(this)).add(amount);
     }
 
@@ -125,6 +127,7 @@ contract VaultFlipToFlip is VaultController, IStrategy {
 
     function priceShare() external view override returns(uint) {
         if (totalShares == 0) return 1e18;
+        //每一个share对应多少flip币，即share的价格以flip币为计价
         return balance().mul(1e18).div(totalShares);
     }
 
@@ -145,6 +148,7 @@ contract VaultFlipToFlip is VaultController, IStrategy {
         delete _shares[msg.sender];
 
         uint _before = _stakingToken.balanceOf(address(this));
+        //取回质押到masterchef的flip 币
         CAKE_MASTER_CHEF.withdraw(pid, _withdraw);
         uint _after = _stakingToken.balanceOf(address(this));
         _withdraw = _after.sub(_before);
@@ -160,6 +164,7 @@ contract VaultFlipToFlip is VaultController, IStrategy {
             withdrawalFee = _minter.withdrawalFee(_withdraw, depositTimestamp);
             uint performanceFee = _minter.performanceFee(profit);
 
+            //传入flip数量，swap转成wbnb bunny币，质押到wbnb bunny币pool增加流动性，产生lp币，转入bunnypool作为reward，performanceFee部分 mint bunny币转给用户
             _minter.mintFor(address(_stakingToken), withdrawalFee, performanceFee, msg.sender, depositTimestamp);
             emit ProfitPaid(msg.sender, profit, performanceFee);
 
@@ -172,7 +177,9 @@ contract VaultFlipToFlip is VaultController, IStrategy {
 
     function harvest() external override onlyKeeper {
         CAKE_MASTER_CHEF.withdraw(pid, 0);
+        //把此合约的flip抵押到swap获取cake
         uint cakeAmount = CAKE.balanceOf(address(this));
+        //cake 分成两部分产生flip
         uint cakeForToken0 = cakeAmount.div(2);
         cakeToToken(_token0, cakeForToken0);
         cakeToToken(_token1, cakeAmount.sub(cakeForToken0));
@@ -181,6 +188,7 @@ contract VaultFlipToFlip is VaultController, IStrategy {
         emit Harvested(liquidity);
     }
 
+    //按照share取出flip币
     function withdraw(uint256 shares) external override onlyWhitelisted {
         uint _withdraw = balance().mul(shares).div(totalShares);
 

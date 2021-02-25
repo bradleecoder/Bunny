@@ -53,13 +53,13 @@ contract VaultCakeToCake is VaultController, IStrategy {
 
     /* ========== STATE VARIABLES ========== */
 
-    uint public constant override pid = 0;
-    //质押cake，获取cake profit 及bunny
+    uint public constant override pid = 0;//cake币在masterchef的pid是0
+    //质押cake，获取cake 作为profit 及bunny
     PoolConstant.PoolTypes public constant override poolType = PoolConstant.PoolTypes.CakeStake;
 
     uint public totalShares;
     mapping (address => uint) private _shares;
-    mapping (address => uint) private _principal;
+    mapping (address => uint) private _principal;//本金
     mapping (address => uint) private _depositedAt;
 
     /* ========== INITIALIZER ========== */
@@ -73,13 +73,17 @@ contract VaultCakeToCake is VaultController, IStrategy {
 
     /* ========== VIEW FUNCTIONS ========== */
 
+    //返回cake余额
     function balance() override public view returns (uint) {
+        //此合约地址的cake余额在masterchef那边
         (uint amount,) = CAKE_MASTER_CHEF.userInfo(pid, address(this));
+        //masterchef那边的amount+此合约地址上拥有的cake
         return CAKE.balanceOf(address(this)).add(amount);
     }
 
     function balanceOf(address account) public view override returns(uint) {
         if (totalShares == 0) return 0;
+        //按照share的百分比获取某个用户的balance，应该会变多
         return balance().mul(sharesOf(account)).div(totalShares);
     }
 
@@ -97,6 +101,7 @@ contract VaultCakeToCake is VaultController, IStrategy {
 
     function earned(address account) public view override returns (uint) {
         if (balanceOf(account) >= principalOf(account)) {
+            //减去本金额度
             return balanceOf(account).sub(principalOf(account));
         } else {
             return 0;
@@ -105,6 +110,7 @@ contract VaultCakeToCake is VaultController, IStrategy {
 
     function priceShare() external view override returns(uint) {
         if (totalShares == 0) return 1e18;
+        //每一个share对于多少cake，每个share的价格，以cake数量计
         return balance().mul(1e18).div(totalShares);
     }
 
@@ -113,6 +119,7 @@ contract VaultCakeToCake is VaultController, IStrategy {
     }
 
     function rewardsToken() external view override returns (address) {
+        //reward就是staking，即cake
         return address(_stakingToken);
     }
 
@@ -122,7 +129,9 @@ contract VaultCakeToCake is VaultController, IStrategy {
         _deposit(_amount, msg.sender);
 
         if (isWhitelist(msg.sender) == false) {
+            //不在白名单的用户记录原始的cake质押额度
             _principal[msg.sender] = _principal[msg.sender].add(_amount);
+            //记录质押的时间
             _depositedAt[msg.sender] = block.timestamp;
         }
     }
@@ -132,12 +141,15 @@ contract VaultCakeToCake is VaultController, IStrategy {
     }
 
     function withdrawAll() external override {
+        //按照share占比获取余额
         uint _withdraw = balanceOf(msg.sender);
-
+        //总的share里面-用户的share
         totalShares = totalShares.sub(_shares[msg.sender]);
         delete _shares[msg.sender];
+        //合约上的余额
         uint cakeBalance = CAKE.balanceOf(address(this));
         if (_withdraw > cakeBalance) {
+            //从masterchef取出质押的cake
             CAKE_MASTER_CHEF.leaveStaking(_withdraw.sub(cakeBalance));
         }
 
@@ -148,13 +160,16 @@ contract VaultCakeToCake is VaultController, IStrategy {
 
         uint withdrawalFee;
         if (canMint() && _withdraw > principal) {
+            //按照share计算的余额-原始的质押额度，即为收益，收益为cake
             uint profit = _withdraw.sub(principal);
             withdrawalFee = _minter.withdrawalFee(_withdraw, depositTimestamp);
             uint performanceFee = _minter.performanceFee(profit);
 
+            //传入cake数量，swap转成wbnb bunny币，质押到wbnb bunny币pool增加流动性，产生lp币，转入bunnypool作为reward，performanceFee的30% mint bunny币转给用户
             _minter.mintFor(address(CAKE), withdrawalFee, performanceFee, msg.sender, depositTimestamp);
             emit ProfitPaid(msg.sender, profit, performanceFee);
 
+            //除去两个费用，将剩余的cake转给用户
             _withdraw = _withdraw.sub(withdrawalFee).sub(performanceFee);
         }
 
@@ -165,10 +180,12 @@ contract VaultCakeToCake is VaultController, IStrategy {
     }
 
     function harvest() public override {
+        //从masterchef收割到收益，然后再将受益质押过去
         CAKE_MASTER_CHEF.leaveStaking(0);
+        //此合约上的cake总量
         uint cakeAmount = CAKE.balanceOf(address(this));
         emit Harvested(cakeAmount);
-
+        //将此合约上的cake质押到masterchef
         CAKE_MASTER_CHEF.enterStaking(cakeAmount);
     }
 
@@ -194,21 +211,25 @@ contract VaultCakeToCake is VaultController, IStrategy {
     /* ========== PRIVATE FUNCTIONS ========== */
 
     function _deposit(uint _amount, address _to) private notPaused {
+        //目前池子里的cake数量
         uint _pool = balance();
+        //用户转cake到此合约上
         CAKE.safeTransferFrom(msg.sender, address(this), _amount);
         uint shares = 0;
         if (totalShares == 0) {
+            //初始share即为用户的amount
             shares = _amount;
         } else {
+            //share为totalShares*amount在pool里的cake的占比
             shares = (_amount.mul(totalShares)).div(_pool);
         }
 
         totalShares = totalShares.add(shares);
         _shares[_to] = _shares[_to].add(shares);
-
+        //将新质押的cake质押到masterchef
         CAKE_MASTER_CHEF.enterStaking(_amount);
         emit Deposited(msg.sender, _amount);
-
+        //收割一下，再质押
         harvest();
     }
 }

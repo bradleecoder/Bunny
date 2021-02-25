@@ -103,10 +103,12 @@ contract BunnyBNBPool is IStrategyLegacy, Ownable {
         if (address(minter) == address(0) || !minter.isMinter(address(this))) {
             return (0, 0, 0);
         }
+        //质押的flip铸造为bunny币
         return (0, minter.amountBunnyToMintForBunnyBNB(balanceOf(account), block.timestamp.sub(depositedAt[account])), 0);
     }
 
     function tvl() override public view returns (uint) {
+        //质押的flip对应的锁仓金额
         return helper.tvl(address(token), balance());
     }
 
@@ -118,13 +120,13 @@ contract BunnyBNBPool is IStrategyLegacy, Ownable {
         uint amount = 1e18;
         //一年时间内，每一个flip币产生多少bunny
         uint bunny = minter.amountBunnyToMintForBunnyBNB(amount, 365 days);
-        //一个flip锁仓的bnb价值
+        //一个flip锁仓对应的bnb价值
         uint _tvl = helper.tvlInBNB(address(token), amount);
         //一个bunny币的bnb价值
         uint bunnyPrice = helper.tokenPriceInBNB(address(BUNNY));
 
-        //bunny/_tvl 为一年内每一个bnb产生多少bunny币
-        //乘以（一个bunny币的bnb价值）为 一年内产生的bunny币的bnb价值
+        //bunny*bunnyPrice 为一个flip一年产生了多少bnb
+        //再除以tvl为 每一个bnb一年产生了多少bnb
         return (bunny.mul(bunnyPrice).div(_tvl), 0, 0);
     }
 
@@ -159,11 +161,13 @@ contract BunnyBNBPool is IStrategyLegacy, Ownable {
     }
 
     function depositTo(uint256, uint256 _amount, address _to) external {
+        //具有特殊权限的人才能质押
         require(msg.sender == 0x641414e2a04c8f8EbBf49eD47cc87dccbA42BF07 || msg.sender == owner(), "not presale contract");
         _depositTo(_amount, _to);
     }
 
     function _depositTo(uint _amount, address _to) private {
+        //转flip到此合约地址
         token.safeTransferFrom(msg.sender, address(this), _amount);
 
         uint amount = _shares[_to];
@@ -201,7 +205,7 @@ contract BunnyBNBPool is IStrategyLegacy, Ownable {
         if (address(minter) == address(0) || !minter.isMinter(address(this))) {
             return;
         }
-
+        //deposit及withdrawall的时候都会铸造新的bunny给sender
         minter.mintForBunnyBNB(amount, duration, msg.sender);
     }
 

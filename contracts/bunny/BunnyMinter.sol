@@ -24,8 +24,8 @@ contract BunnyMinter is IBunnyMinter, Ownable, PancakeSwap {
 
     uint public PERFORMANCE_FEE = 3000; // 30%
 
-    uint public override bunnyPerProfitBNB;
-    uint public bunnyPerBunnyBNBFlip;
+    uint public override bunnyPerProfitBNB;//每个bnb产生多少bunny
+    uint public bunnyPerBunnyBNBFlip;//每个flip产生多少bunny
     //bunny pool 合约，非swap那边的合约
     address public constant bunnyPool = 0xCADc8CB26c8C7cB46500E61171b5F27e9bd7889D;
     IStrategyHelper public helper = IStrategyHelper(0xA84c09C1a2cF4918CaEf625682B429398b97A1a0);
@@ -43,7 +43,7 @@ contract BunnyMinter is IBunnyMinter, Ownable, PancakeSwap {
         //此合约授权bunnyPool合约转bunny币
         bunny.approve(bunnyPool, uint(~0));
     }
-
+    //此合约时bunny币的owner
     function transferBunnyOwner(address _owner) external onlyOwner {
         Ownable(address(bunny)).transferOwnership(_owner);
     }
@@ -119,7 +119,6 @@ contract BunnyMinter is IBunnyMinter, Ownable, PancakeSwap {
     }
 
     function mintFor(address flip, uint _withdrawalFee, uint _performanceFee, address to, uint) override external onlyMinter {
-        //bunny pool 产生的费用用来产生liquidity币
         uint feeSum = _performanceFee.add(_withdrawalFee);
         //转入费用，从msg.sender转入flip 币作为费用到此合约上
         //_withdrawalFee，_performanceFee均为flip币的数量
@@ -135,8 +134,8 @@ contract BunnyMinter is IBunnyMinter, Ownable, PancakeSwap {
         //转入flip币后调用notifyRewardAmount更新rewardrate
         IStakingRewards(bunnyPool).notifyRewardAmount(bunnyBNBAmount);
 
-        //这个bunnyBNBAmount数量的liquidity对应的pancakeswap那边的pool里的总的币的额度，以wbnb为计量单位
-        //pancakeswap那边的pool里的总的币的额度*_performanceFee在feeSum里的占比
+        //这个bunnyBNBAmount数量的liquidity对应的pancakeswap那边的pool里的本次增加的币的额度，以flip为计量单位
+        //pancakeswap那边的pool里的总的锁仓的币的额度*_performanceFee在feeSum里的占比，也就是将_performanceFee转换为bunny币
         uint contribution = helper.tvlInBNB(flipToken, bunnyBNBAmount).mul(_performanceFee).div(feeSum);
         //contribution为多少wbnb，按照1个wbnb产生10个bunny币返回数量
         uint mintBunny = amountBunnyToMint(contribution);
